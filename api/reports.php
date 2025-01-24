@@ -6,26 +6,34 @@ require_once __DIR__ . '/../config/database.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Ensure user is logged in
+// Set JSON content type
+header('Content-Type: application/json');
+
+// Start session and check auth
 session_start();
 if (!isLoggedIn()) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Unauthorized',
+        'debug' => ['User not logged in']
+    ]);
     exit;
 }
 
 $userId = $_SESSION['user_id'];
 $debug = [];
+$response = ['goals' => [], 'milestones' => [], 'goals_by_priority' => [], 'monthly_trend' => []];
 
 try {
-    $response = [];
     $debug[] = "Starting report generation for user $userId";
     
-    // Get goal statistics
+    // Get database connection
     $db = Database::getInstance();
     $conn = $db->getConnection();
     $debug[] = "Database connection established";
     
+    // Get goal statistics
     $stmt = $conn->prepare("
         SELECT 
             COUNT(*) as total_goals,
@@ -37,11 +45,13 @@ try {
     ");
     $stmt->execute(['user_id' => $userId]);
     $response['goals'] = $stmt->fetch(PDO::FETCH_ASSOC);
+    $debug[] = "Goal statistics query executed";
 
     // Convert null values to 0 and ensure all values are integers
     $response['goals'] = array_map(function($value) {
         return $value === null ? 0 : (int)$value;
     }, $response['goals']);
+    $debug[] = "Goal statistics processed";
 
     // Get milestone statistics
     $stmt = $conn->prepare("
@@ -57,11 +67,13 @@ try {
     ");
     $stmt->execute(['user_id' => $userId]);
     $response['milestones'] = $stmt->fetch(PDO::FETCH_ASSOC);
+    $debug[] = "Milestone statistics query executed";
 
     // Convert null values to 0 and ensure all values are integers
     $response['milestones'] = array_map(function($value) {
         return $value === null ? 0 : (int)$value;
     }, $response['milestones']);
+    $debug[] = "Milestone statistics processed";
 
     // Get goals by priority
     $stmt = $conn->prepare("
@@ -74,6 +86,7 @@ try {
     ");
     $stmt->execute(['user_id' => $userId]);
     $response['goals_by_priority'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $debug[] = "Goals by priority query executed";
 
     // Ensure all priorities are represented and counts are integers
     $priorities = ['low', 'medium', 'high'];
@@ -91,64 +104,43 @@ try {
             }
         }
         if (!$found) {
-            $priorityData[] = ['priority' => $priority, 'count' => 0];
+            $priorityData[] = [
+                'priority' => $priority,
+                'count' => 0
+            ];
         }
     }
     $response['goals_by_priority'] = $priorityData;
+    $debug[] = "Goals by priority data processed";
 
-    // Get upcoming milestones
+    // Get monthly trend data for the last 6 months
     $stmt = $conn->prepare("
         SELECT 
-            m.title,
-            m.completion_date,
-            g.title as goal_title,
-            COALESCE(m.total_todos, 0) as total_todos,
-            COALESCE(m.completed_todos, 0) as completed_todos
-        FROM milestones m
-        JOIN goals g ON m.goal_id = g.id
-        WHERE g.user_id = :user_id
-            AND m.status = 'pending'
-            AND m.completion_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)
-        ORDER BY m.completion_date ASC
-        LIMIT 5
-    ");
-    $stmt->execute(['user_id' => $userId]);
-    $response['upcoming_milestones'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Convert numeric values to integers in upcoming_milestones
-    foreach ($response['upcoming_milestones'] as &$milestone) {
-        $milestone['total_todos'] = (int)$milestone['total_todos'];
-        $milestone['completed_todos'] = (int)$milestone['completed_todos'];
-    }
-
-    // Get monthly goal completion trend
-    $stmt = $conn->prepare("
-        SELECT 
-            DATE_FORMAT(created_at, '%Y-%m') as month,
+            DATE_FORMAT(deadline, '%Y-%m') as month,
             COUNT(*) as total_goals,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_goals
         FROM goals 
-        WHERE user_id = :user_id
-            AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        WHERE user_id = :user_id 
+        AND deadline >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)
+        GROUP BY DATE_FORMAT(deadline, '%Y-%m')
         ORDER BY month ASC
     ");
     $stmt->execute(['user_id' => $userId]);
-    $response['monthly_trend'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $debug[] = "Monthly trend query executed";
 
-    // Ensure we have data for the last 6 months and convert to integers
+    // Ensure we have data for all months
     $months = [];
     for ($i = 5; $i >= 0; $i--) {
-        $date = new DateTime();
-        $date->modify("-$i months");
-        $months[$date->format('Y-m')] = [
-            'month' => $date->format('Y-m'),
+        $monthKey = date('Y-m', strtotime("-$i months"));
+        $months[$monthKey] = [
+            'month' => $monthKey,
             'total_goals' => 0,
             'completed_goals' => 0
         ];
     }
 
-    foreach ($response['monthly_trend'] as $item) {
+    foreach ($monthlyData as $item) {
         if (isset($months[$item['month']])) {
             $months[$item['month']] = [
                 'month' => $item['month'],
@@ -157,33 +149,36 @@ try {
             ];
         }
     }
+    
     $response['monthly_trend'] = array_values($months);
+    $debug[] = "Monthly trend data processed";
+    $debug[] = "Report generation completed successfully";
 
-    $debug[] = "All queries completed successfully";
+    // Send the success response
     echo json_encode([
-        'success' => true, 
+        'success' => true,
         'data' => $response,
         'debug' => $debug
     ]);
+
 } catch (PDOException $e) {
     $debug[] = "Database error: " . $e->getMessage();
     $debug[] = "Stack trace: " . $e->getTraceAsString();
+    error_log("Database error in reports.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
-        'message' => 'Database error', 
-        'error' => $e->getMessage(),
+        'success' => false,
+        'message' => 'Database error occurred',
         'debug' => $debug
     ]);
 } catch (Exception $e) {
-    $debug[] = "Unexpected error: " . $e->getMessage();
+    $debug[] = "General error: " . $e->getMessage();
     $debug[] = "Stack trace: " . $e->getTraceAsString();
+    error_log("General error in reports.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
-        'message' => 'Unexpected error', 
-        'error' => $e->getMessage(),
+        'success' => false,
+        'message' => 'An error occurred',
         'debug' => $debug
     ]);
 }
-?>

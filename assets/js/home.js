@@ -12,19 +12,57 @@ $(document).ready(function() {
         $.ajax({
             url: 'api/reports.php',
             method: 'GET',
+            dataType: 'json',
             success: function(response) {
-                if (response && response.success && response.data) {
+                console.log('Raw response:', response);
+                if (response && response.success === true && response.data) {
                     console.log('Reports data:', response.data);
                     updateDashboard(response.data);
                 } else {
-                    console.error('Error loading reports:', response ? response.message : 'Unknown error');
+                    console.error('Error loading reports:', {
+                        message: response?.message || 'Unknown error',
+                        debug: response?.debug || [],
+                        response: response
+                    });
+                    // Show error in the UI
+                    showError('Error loading reports. Please try refreshing the page.');
                 }
             },
             error: function(xhr, status, error) {
-                console.error('AJAX error loading reports:', error);
-                console.error('Response:', xhr.responseText);
+                console.error('AJAX error loading reports:', {
+                    error: error,
+                    status: status,
+                    response: xhr.responseText
+                });
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    console.error('Parsed error response:', {
+                        message: response?.message,
+                        debug: response?.debug
+                    });
+                } catch (e) {
+                    console.error('Could not parse error response');
+                }
+                // Show error in the UI
+                showError('Could not load reports. Please try again later.');
             }
         });
+    }
+
+    function showError(message) {
+        // Create error alert if it doesn't exist
+        if ($('#errorAlert').length === 0) {
+            const alert = $(`
+                <div id="errorAlert" class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <span class="message"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            $('.container').first().prepend(alert);
+        }
+        
+        // Update error message
+        $('#errorAlert .message').text(message);
     }
 
     function updateDashboard(data) {
@@ -134,37 +172,52 @@ $(document).ready(function() {
     function updateMonthlyTrendChart(data) {
         const ctx = document.getElementById('monthlyTrendChart').getContext('2d');
         
+        // Format dates for display
+        const labels = data.map(item => {
+            const [year, month] = item.month.split('-');
+            return new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' });
+        });
+
+        const totalGoals = data.map(item => item.total_goals);
+        const completedGoals = data.map(item => item.completed_goals);
+
         if (monthlyTrendChart) {
             monthlyTrendChart.destroy();
         }
 
-        const months = data.map(item => item.month);
-        const totalGoals = data.map(item => item.total_goals || 0);
-        const completedGoals = data.map(item => item.completed_goals || 0);
-
         monthlyTrendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: months,
+                labels: labels,
                 datasets: [
                     {
                         label: 'Total Goals',
                         data: totalGoals,
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        fill: true
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     },
                     {
                         label: 'Completed Goals',
                         data: completedGoals,
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                        fill: true
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }
                 ]
             },
             options: {
                 responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: false
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
