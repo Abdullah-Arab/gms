@@ -54,6 +54,7 @@ class Database {
                     user_id INT NOT NULL,
                     title VARCHAR(255) NOT NULL,
                     description TEXT,
+                    deadline DATETIME NOT NULL,
                     priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
                     status ENUM('not_started', 'in_progress', 'completed') DEFAULT 'not_started',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -97,8 +98,26 @@ class Database {
                     ADD COLUMN IF NOT EXISTS completed_todos INT DEFAULT 0,
                     ADD COLUMN IF NOT EXISTS total_todos INT DEFAULT 0
                 ");
+
+                // Add deadline column to goals table if it doesn't exist
+                $this->conn->exec("
+                    ALTER TABLE goals 
+                    ADD COLUMN IF NOT EXISTS deadline DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ");
             } catch (PDOException $e) {
                 // Ignore error if columns already exist
+            }
+
+            // Add indexes for better performance
+            try {
+                $this->conn->exec("
+                    ALTER TABLE goals 
+                    ADD INDEX idx_user_status (user_id, status),
+                    ADD INDEX idx_user_priority (user_id, priority),
+                    ADD INDEX idx_created_at (created_at)
+                ");
+            } catch (PDOException $e) {
+                // Ignore error if indexes already exist
             }
 
         } catch (PDOException $e) {

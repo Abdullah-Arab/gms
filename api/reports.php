@@ -30,25 +30,35 @@ try {
     $stmt->execute(['user_id' => $userId]);
     $response['goals'] = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Convert null values to 0
+    $response['goals'] = array_map(function($value) {
+        return $value === null ? 0 : (int)$value;
+    }, $response['goals']);
+
     // Get milestone statistics
     $stmt = $conn->prepare("
         SELECT 
             COUNT(*) as total_milestones,
-            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-            SUM(total_todos) as total_todos,
-            SUM(completed_todos) as completed_todos
-        FROM milestones m
-        JOIN goals g ON m.goal_id = g.id
+            SUM(CASE WHEN m.status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN m.status = 'completed' THEN 1 ELSE 0 END) as completed,
+            COALESCE(SUM(m.total_todos), 0) as total_todos,
+            COALESCE(SUM(m.completed_todos), 0) as completed_todos
+        FROM goals g
+        LEFT JOIN milestones m ON g.id = m.goal_id
         WHERE g.user_id = :user_id
     ");
     $stmt->execute(['user_id' => $userId]);
     $response['milestones'] = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Convert null values to 0
+    $response['milestones'] = array_map(function($value) {
+        return $value === null ? 0 : (int)$value;
+    }, $response['milestones']);
+
     // Get goals by priority
     $stmt = $conn->prepare("
         SELECT 
-            priority,
+            COALESCE(priority, 'medium') as priority,
             COUNT(*) as count
         FROM goals 
         WHERE user_id = :user_id
@@ -57,14 +67,32 @@ try {
     $stmt->execute(['user_id' => $userId]);
     $response['goals_by_priority'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Get upcoming milestones (next 7 days)
+    // Ensure all priorities are represented
+    $priorities = ['low', 'medium', 'high'];
+    $priorityData = [];
+    foreach ($priorities as $priority) {
+        $found = false;
+        foreach ($response['goals_by_priority'] as $item) {
+            if ($item['priority'] === $priority) {
+                $priorityData[] = $item;
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            $priorityData[] = ['priority' => $priority, 'count' => 0];
+        }
+    }
+    $response['goals_by_priority'] = $priorityData;
+
+    // Get upcoming milestones
     $stmt = $conn->prepare("
         SELECT 
             m.title,
             m.completion_date,
             g.title as goal_title,
-            m.total_todos,
-            m.completed_todos
+            COALESCE(m.total_todos, 0) as total_todos,
+            COALESCE(m.completed_todos, 0) as completed_todos
         FROM milestones m
         JOIN goals g ON m.goal_id = g.id
         WHERE g.user_id = :user_id
@@ -76,7 +104,7 @@ try {
     $stmt->execute(['user_id' => $userId]);
     $response['upcoming_milestones'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Get monthly goal completion trend (last 6 months)
+    // Get monthly goal completion trend
     $stmt = $conn->prepare("
         SELECT 
             DATE_FORMAT(created_at, '%Y-%m') as month,
@@ -91,8 +119,29 @@ try {
     $stmt->execute(['user_id' => $userId]);
     $response['monthly_trend'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Ensure we have data for the last 6 months
+    $months = [];
+    for ($i = 5; $i >= 0; $i--) {
+        $date = new DateTime();
+        $date->modify("-$i months");
+        $months[$date->format('Y-m')] = [
+            'month' => $date->format('Y-m'),
+            'total_goals' => 0,
+            'completed_goals' => 0
+        ];
+    }
+
+    foreach ($response['monthly_trend'] as $item) {
+        if (isset($months[$item['month']])) {
+            $months[$item['month']] = $item;
+        }
+    }
+    $response['monthly_trend'] = array_values($months);
+
+    error_log('Reports API response: ' . json_encode($response, JSON_PRETTY_PRINT));
     echo json_encode(['success' => true, 'data' => $response]);
 } catch (PDOException $e) {
+    error_log('Reports API error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }

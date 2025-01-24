@@ -12,8 +12,8 @@ class Goal {
 
     public function create($userId, $title, $description, $deadline, $priority = 'medium') {
         try {
-            $stmt = $this->conn->prepare("INSERT INTO goals (user_id, title, description, deadline, priority) 
-                VALUES (:user_id, :title, :description, :deadline, :priority)");
+            $stmt = $this->conn->prepare("INSERT INTO goals (user_id, title, description, deadline, priority, status) 
+                VALUES (:user_id, :title, :description, :deadline, :priority, 'not_started')");
             
             $stmt->execute([
                 ':user_id' => $userId,
@@ -104,32 +104,33 @@ class Goal {
 
     public function getUserGoals($userId, $filters = []) {
         try {
-            $sql = "SELECT g.*, 
-                           COUNT(m.id) as total_milestones,
-                           SUM(CASE WHEN m.status = 'completed' THEN 1 ELSE 0 END) as completed_milestones
-                    FROM goals g
-                    LEFT JOIN milestones m ON g.id = m.goal_id
-                    WHERE g.user_id = :user_id";
-            
+            $sql = "
+                SELECT g.*, 
+                       COUNT(DISTINCT m.id) as total_milestones,
+                       SUM(CASE WHEN m.status = 'completed' THEN 1 ELSE 0 END) as completed_milestones
+                FROM goals g
+                LEFT JOIN milestones m ON g.id = m.goal_id
+                WHERE g.user_id = :user_id
+            ";
+
             $params = [':user_id' => $userId];
 
-            if (!empty($filters['status'])) {
+            if (!empty($filters['status']) && $filters['status'] !== 'all') {
                 $sql .= " AND g.status = :status";
                 $params[':status'] = $filters['status'];
             }
 
-            if (!empty($filters['priority'])) {
-                $sql .= " AND g.priority = :priority";
-                $params[':priority'] = $filters['priority'];
-            }
-
-            $sql .= " GROUP BY g.id ORDER BY g.deadline ASC";
+            $sql .= " GROUP BY g.id ORDER BY g.created_at DESC";
 
             $stmt = $this->conn->prepare($sql);
             $stmt->execute($params);
 
             $goals = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Calculate progress for each goal
             foreach ($goals as &$goal) {
+                $goal['total_milestones'] = (int)$goal['total_milestones'];
+                $goal['completed_milestones'] = (int)$goal['completed_milestones'];
                 $goal['progress'] = $goal['total_milestones'] > 0 
                     ? ($goal['completed_milestones'] / $goal['total_milestones']) * 100 
                     : 0;
@@ -137,6 +138,7 @@ class Goal {
 
             return $goals;
         } catch (PDOException $e) {
+            error_log('Error in getUserGoals: ' . $e->getMessage());
             return [];
         }
     }

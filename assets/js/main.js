@@ -69,28 +69,36 @@ $(document).ready(function() {
 
     // Goals handling
     function loadGoals(filter = 'all') {
+        console.log('Loading goals with filter:', filter);
         $.ajax({
             url: 'api/goals.php',
             method: 'GET',
             data: { action: 'list', filter: filter },
             success: function(response) {
+                console.log('Goals API response:', response);
                 if (response.success) {
                     displayGoals(response.goals);
+                } else {
+                    console.error('Failed to load goals:', response.message);
                 }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX error loading goals:', error);
+                console.error('Response:', xhr.responseText);
             }
         });
     }
 
     function displayGoals(goals) {
-        const container = $('#goalsDashboard');
-        container.find('.goals-list').remove();
+        const container = $('#goalsList');
+        container.empty();
 
         if (goals.length === 0) {
             container.append('<p class="text-muted">No goals found. Click "New Goal" to create one.</p>');
             return;
         }
 
-        const list = $('<div class="goals-list row"></div>');
+        const list = $('<div class="row"></div>');
         goals.forEach(goal => {
             const card = $(`
                 <div class="col-md-4 mb-4">
@@ -100,30 +108,25 @@ $(document).ready(function() {
                                 <h5 class="card-title">${goal.title}</h5>
                                 <span class="badge bg-${getPriorityColor(goal.priority)}">${goal.priority}</span>
                             </div>
-                            <p class="card-text">${goal.description}</p>
-                            <div class="progress mb-3" style="height: 5px;">
-                                <div class="progress-bar" role="progressbar" 
-                                    style="width: ${goal.progress}%" 
-                                    aria-valuenow="${goal.progress}" 
-                                    aria-valuemin="0" 
-                                    aria-valuemax="100">
-                                </div>
+                            <p class="card-text">${goal.description || 'No description'}</p>
+                            <div class="mt-3">
+                                <span class="badge bg-${getStatusColor(goal.status)}">${formatStatus(goal.status)}</span>
                             </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">
-                                    ${goal.completed_milestones}/${goal.total_milestones} milestones
-                                </small>
-                                <div class="btn-group">
-                                    <a href="goal-details.php?id=${goal.id}" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-eye"></i> Details
-                                    </a>
-                                    <button class="btn btn-sm btn-outline-secondary edit-goal" data-goal-id="${goal.id}">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-goal" data-goal-id="${goal.id}">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
+                            <div class="mt-3">
+                                <small class="text-muted">Deadline: ${formatDate(goal.deadline)}</small>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <div class="btn-group w-100" role="group">
+                                <button class="btn btn-outline-primary btn-sm view-milestones" data-goal-id="${goal.id}">
+                                    <i class="bi bi-list-check"></i> Milestones
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm edit-goal" data-goal-id="${goal.id}">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm delete-goal" data-goal-id="${goal.id}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -131,7 +134,6 @@ $(document).ready(function() {
             `);
             list.append(card);
         });
-
         container.append(list);
     }
 
@@ -378,9 +380,9 @@ $(document).ready(function() {
     let monthlyTrendChart = null;
 
     // Load reports on page load for logged-in users
-    if ($('#goalsDashboard').length > 0) {
-        loadReports();
+    if ($('#goalsList').length > 0) {
         loadGoals();
+        loadReports();
     }
 
     function loadReports() {
@@ -389,13 +391,22 @@ $(document).ready(function() {
             method: 'GET',
             success: function(response) {
                 if (response.success) {
+                    console.log('Reports data:', response.data);
                     updateDashboard(response.data);
+                } else {
+                    console.error('Error loading reports:', response.message);
                 }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX error loading reports:', error);
+                console.error('Response:', xhr.responseText);
             }
         });
     }
 
     function updateDashboard(data) {
+        console.log('Updating dashboard with data:', data);
+
         // Update summary cards
         $('#totalGoals').text(data.goals.total_goals);
         $('#completedGoals').text(data.goals.completed);
@@ -406,17 +417,15 @@ $(document).ready(function() {
             : 0;
         $('#todoCompletion').text(todoCompletion + '%');
 
-        // Update Goal Status Chart
-        updateGoalStatusChart(data.goals);
-
-        // Update Goal Priority Chart
-        updateGoalPriorityChart(data.goals_by_priority);
-
-        // Update Monthly Trend Chart
-        updateMonthlyTrendChart(data.monthly_trend);
-
-        // Update Upcoming Milestones
-        updateUpcomingMilestones(data.upcoming_milestones);
+        // Update charts
+        try {
+            updateGoalStatusChart(data.goals);
+            updateGoalPriorityChart(data.goals_by_priority);
+            updateMonthlyTrendChart(data.monthly_trend);
+            updateUpcomingMilestones(data.upcoming_milestones);
+        } catch (error) {
+            console.error('Error updating charts:', error);
+        }
     }
 
     function updateGoalStatusChart(data) {
@@ -583,8 +592,37 @@ $(document).ready(function() {
         loadReports();
     };
 
+    // Helper functions
+    function formatDate(dateString) {
+        if (!dateString) return 'No deadline';
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+    }
+
+    function formatStatus(status) {
+        return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function getStatusColor(status) {
+        switch (status) {
+            case 'not_started': return 'secondary';
+            case 'in_progress': return 'primary';
+            case 'completed': return 'success';
+            default: return 'secondary';
+        }
+    }
+
+    function getPriorityColor(priority) {
+        switch (priority) {
+            case 'low': return 'info';
+            case 'medium': return 'warning';
+            case 'high': return 'danger';
+            default: return 'secondary';
+        }
+    }
+
     // Initial load
-    if ($('#goalsDashboard').length) {
+    if ($('#goalsList').length > 0) {
         loadGoals();
         loadReports();
     }
