@@ -32,46 +32,78 @@ class Database {
     }
 
     private function initializeDatabase() {
-        // Create database if not exists
-        $this->conn->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
-        $this->conn->exec("USE " . DB_NAME);
+        try {
+            // Create database if not exists
+            $this->conn->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
+            $this->conn->exec("USE " . DB_NAME);
 
-        // Create Users table
-        $this->conn->exec("CREATE TABLE IF NOT EXISTS users (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            reset_token VARCHAR(255),
-            reset_token_expiry DATETIME,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )");
+            // Create users table
+            $this->conn->exec("
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
 
-        // Create Goals table
-        $this->conn->exec("CREATE TABLE IF NOT EXISTS goals (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            description TEXT,
-            deadline DATETIME NOT NULL,
-            priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
-            status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
+            // Create goals table
+            $this->conn->exec("
+                CREATE TABLE IF NOT EXISTS goals (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
+                    status ENUM('not_started', 'in_progress', 'completed') DEFAULT 'not_started',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            ");
 
-        // Create Milestones table
-        $this->conn->exec("CREATE TABLE IF NOT EXISTS milestones (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            goal_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            completion_date DATETIME,
-            status ENUM('pending', 'completed') DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
-        )");
+            // Create milestones table
+            $this->conn->exec("
+                CREATE TABLE IF NOT EXISTS milestones (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    goal_id INT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    completion_date DATETIME,
+                    status ENUM('pending', 'completed') DEFAULT 'pending',
+                    completed_todos INT DEFAULT 0,
+                    total_todos INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+                )
+            ");
+
+            // Create todo_items table
+            $this->conn->exec("
+                CREATE TABLE IF NOT EXISTS todo_items (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    milestone_id INT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    status ENUM('pending', 'completed') DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE
+                )
+            ");
+
+            // Add columns to milestones table if they don't exist
+            try {
+                $this->conn->exec("
+                    ALTER TABLE milestones 
+                    ADD COLUMN IF NOT EXISTS completed_todos INT DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS total_todos INT DEFAULT 0
+                ");
+            } catch (PDOException $e) {
+                // Ignore error if columns already exist
+            }
+
+        } catch (PDOException $e) {
+            die("Error initializing database: " . $e->getMessage());
+        }
     }
 }
 ?>

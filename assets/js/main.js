@@ -82,47 +82,57 @@ $(document).ready(function() {
     }
 
     function displayGoals(goals) {
-        const goalsList = $('#goalsList');
-        goalsList.empty();
+        const container = $('#goalsDashboard');
+        container.find('.goals-list').remove();
 
+        if (goals.length === 0) {
+            container.append('<p class="text-muted">No goals found. Click "New Goal" to create one.</p>');
+            return;
+        }
+
+        const list = $('<div class="goals-list row"></div>');
         goals.forEach(goal => {
-            const deadline = new Date(goal.deadline);
-            const progress = goal.progress || 0;
             const card = $(`
                 <div class="col-md-4 mb-4">
-                    <div class="card">
+                    <div class="card h-100">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <h5 class="card-title">${goal.title}</h5>
                                 <span class="badge bg-${getPriorityColor(goal.priority)}">${goal.priority}</span>
                             </div>
                             <p class="card-text">${goal.description}</p>
-                            <div class="progress mb-3">
-                                <div class="progress-bar" role="progressbar" style="width: ${progress}%">
-                                    ${Math.round(progress)}%
+                            <div class="progress mb-3" style="height: 5px;">
+                                <div class="progress-bar" role="progressbar" 
+                                    style="width: ${goal.progress}%" 
+                                    aria-valuenow="${goal.progress}" 
+                                    aria-valuemin="0" 
+                                    aria-valuemax="100">
                                 </div>
                             </div>
-                            <p class="text-muted">
-                                <i class="bi bi-calendar"></i> 
-                                ${deadline.toLocaleDateString()}
-                            </p>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-primary view-milestones" data-goal-id="${goal.id}">
-                                    Milestones
-                                </button>
-                                <button class="btn btn-sm btn-outline-success edit-goal" data-goal-id="${goal.id}">
-                                    Edit
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger delete-goal" data-goal-id="${goal.id}">
-                                    Delete
-                                </button>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    ${goal.completed_milestones}/${goal.total_milestones} milestones
+                                </small>
+                                <div class="btn-group">
+                                    <a href="goal-details.php?id=${goal.id}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> Details
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-secondary edit-goal" data-goal-id="${goal.id}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger delete-goal" data-goal-id="${goal.id}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             `);
-            goalsList.append(card);
+            list.append(card);
         });
+
+        container.append(list);
     }
 
     function getPriorityColor(priority) {
@@ -219,10 +229,14 @@ $(document).ready(function() {
     }
 
     $('#saveMilestone').click(function() {
+        const dateInput = $('#milestoneDate').val();
+        // Format the date to match the expected format (YYYY-MM-DD HH:mm)
+        const formattedDate = dateInput.replace('T', ' ');
+        
         const milestoneData = {
             goal_id: $('#goalId').val(),
             title: $('#milestoneTitle').val(),
-            completion_date: $('#milestoneDate').val()
+            completion_date: formattedDate
         };
 
         $.ajax({

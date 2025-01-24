@@ -12,14 +12,43 @@ class Milestone {
 
     public function create($goalId, $title, $completionDate) {
         try {
-            $stmt = $this->conn->prepare("INSERT INTO milestones (goal_id, title, completion_date) 
-                VALUES (:goal_id, :title, :completion_date)");
+            // Validate completion date
+            if (!$this->isValidDate($completionDate)) {
+                return ['success' => false, 'message' => 'Invalid completion date format'];
+            }
+
+            // Ensure date is in correct format
+            $date = new DateTime($completionDate);
+            $formattedDate = $date->format('Y-m-d H:i:s');
+
+            // Get table columns to check if new columns exist
+            $stmt = $this->conn->prepare("DESCRIBE milestones");
+            $stmt->execute();
+            $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
             
-            $stmt->execute([
+            // Build the insert query based on available columns
+            $fields = ['goal_id', 'title', 'completion_date'];
+            $values = [':goal_id', ':title', ':completion_date'];
+            $params = [
                 ':goal_id' => $goalId,
                 ':title' => $title,
-                ':completion_date' => $completionDate
-            ]);
+                ':completion_date' => $formattedDate
+            ];
+            
+            if (in_array('total_todos', $columns)) {
+                $fields[] = 'total_todos';
+                $values[] = '0';
+            }
+            if (in_array('completed_todos', $columns)) {
+                $fields[] = 'completed_todos';
+                $values[] = '0';
+            }
+
+            $sql = "INSERT INTO milestones (" . implode(', ', $fields) . ") 
+                   VALUES (" . implode(', ', $values) . ")";
+            
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute($params);
 
             return ['success' => true, 'milestone_id' => $this->conn->lastInsertId()];
         } catch (PDOException $e) {
@@ -73,9 +102,19 @@ class Milestone {
     public function getMilestones($goalId) {
         try {
             $stmt = $this->conn->prepare("
-                SELECT * FROM milestones 
-                WHERE goal_id = :goal_id 
-                ORDER BY completion_date ASC
+                SELECT m.*, 
+                       COALESCE(t.total_todos, 0) as total_todos,
+                       COALESCE(t.completed_todos, 0) as completed_todos
+                FROM milestones m
+                LEFT JOIN (
+                    SELECT milestone_id,
+                           COUNT(*) as total_todos,
+                           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_todos
+                    FROM todo_items
+                    GROUP BY milestone_id
+                ) t ON m.id = t.milestone_id
+                WHERE m.goal_id = :goal_id 
+                ORDER BY m.completion_date ASC
             ");
             
             $stmt->execute([':goal_id' => $goalId]);
@@ -85,8 +124,27 @@ class Milestone {
         }
     }
 
+    public function getGoalByMilestoneId($milestoneId) {
+        try {
+            $stmt = $this->conn->prepare("
+                SELECT g.* FROM goals g
+                JOIN milestones m ON g.id = m.goal_id
+                WHERE m.id = :milestone_id
+            ");
+            
+            $stmt->execute([':milestone_id' => $milestoneId]);
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+
     public function toggleStatus($milestoneId, $goalId) {
         try {
+            // Begin transaction
+            $this->conn->beginTransaction();
+
+            // Toggle milestone status
             $stmt = $this->conn->prepare("
                 UPDATE milestones 
                 SET status = CASE 
@@ -101,9 +159,54 @@ class Milestone {
                 ':goal_id' => $goalId
             ]);
 
+            // Check if all milestones are completed for this goal
+            $stmt = $this->conn->prepare("
+                SELECT 
+                    COUNT(*) as total_milestones,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_milestones
+                FROM milestones
+                WHERE goal_id = :goal_id
+            ");
+            $stmt->execute([':goal_id' => $goalId]);
+            $counts = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Update goal status if all milestones are completed
+            if ($counts['total_milestones'] > 0 && 
+                $counts['total_milestones'] == $counts['completed_milestones']) {
+                $stmt = $this->conn->prepare("
+                    UPDATE goals 
+                    SET status = 'completed'
+                    WHERE id = :goal_id
+                ");
+                $stmt->execute([':goal_id' => $goalId]);
+            } else {
+                $stmt = $this->conn->prepare("
+                    UPDATE goals 
+                    SET status = 'in_progress'
+                    WHERE id = :goal_id
+                ");
+                $stmt->execute([':goal_id' => $goalId]);
+            }
+
+            // Commit transaction
+            $this->conn->commit();
+
             return ['success' => true, 'message' => 'Milestone status updated successfully'];
         } catch (PDOException $e) {
+            // Rollback transaction on error
+            $this->conn->rollBack();
             return ['success' => false, 'message' => 'Failed to update milestone status: ' . $e->getMessage()];
+        }
+    }
+
+    private function isValidDate($date) {
+        if (empty($date)) return false;
+        
+        try {
+            $d = new DateTime($date);
+            return true; // If DateTime can parse it, it's valid
+        } catch (Exception $e) {
+            return false;
         }
     }
 }
