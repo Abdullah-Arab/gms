@@ -118,9 +118,9 @@ $(document).ready(function() {
                         </div>
                         <div class="card-footer bg-transparent">
                             <div class="btn-group w-100" role="group">
-                                <button class="btn btn-outline-primary btn-sm view-milestones" data-goal-id="${goal.id}">
-                                    <i class="bi bi-list-check"></i> Milestones
-                                </button>
+                                <a href="goal-details.php?id=${goal.id}" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-list-check"></i> Details
+                                </a>
                                 <button class="btn btn-outline-secondary btn-sm edit-goal" data-goal-id="${goal.id}">
                                     <i class="bi bi-pencil"></i> Edit
                                 </button>
