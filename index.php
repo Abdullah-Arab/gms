@@ -92,23 +92,10 @@ $isLoggedIn = isset($_SESSION['user_id']);
         <?php else: ?>
             <!-- Goals Dashboard -->
             <div id="goalsDashboard">
-                <div class="row mb-4">
-                    <div class="col">
-                        <h2>My Goals</h2>
-                    </div>
-                    <div class="col-auto">
-                        <div class="btn-group">
-                            <button class="btn btn-outline-primary" data-filter="all">All</button>
-                            <button class="btn btn-outline-primary" data-filter="pending">Pending</button>
-                            <button class="btn btn-outline-primary" data-filter="in_progress">In Progress</button>
-                            <button class="btn btn-outline-primary" data-filter="completed">Completed</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="goalsList" class="row">
-                    <!-- Goals will be dynamically loaded here -->
-                </div>
+                <?php 
+                define('INCLUDED', true);
+                include 'dashboard.php'; 
+                ?>
             </div>
 
             <!-- Goal Modal -->
@@ -150,41 +137,12 @@ $isLoggedIn = isset($_SESSION['user_id']);
                     </div>
                 </div>
             </div>
-
-            <!-- Milestone Modal -->
-            <div class="modal fade" id="milestoneModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Add Milestone</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="milestoneForm">
-                                <input type="hidden" id="goalId">
-                                <div class="mb-3">
-                                    <label for="milestoneTitle" class="form-label">Title</label>
-                                    <input type="text" class="form-control" id="milestoneTitle" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="milestoneDate" class="form-label">Completion Date</label>
-                                    <input type="datetime-local" class="form-control" id="milestoneDate" required>
-                                </div>
-                            </form>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="button" class="btn btn-primary" id="saveMilestone">Save Milestone</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         <?php endif; ?>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.8.0/dist/chart.min.js"></script>
     <script src="assets/js/main.js"></script>
 </body>
 </html>

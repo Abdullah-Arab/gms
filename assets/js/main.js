@@ -147,7 +147,8 @@ $(document).ready(function() {
     // Goal Modal handling
     let editingGoalId = null;
 
-    $('#addGoalBtn').click(function() {
+    // Handle both the nav button and the dashboard button
+    $(document).on('click', '#addGoalBtn, .add-goal-btn', function() {
         editingGoalId = null;
         $('#goalModal .modal-title').text('Add New Goal');
         $('#goalForm')[0].reset();
@@ -155,28 +156,39 @@ $(document).ready(function() {
     });
 
     $('#saveGoal').click(function() {
+        const dateInput = $('#goalDeadline').val();
+        // Format the date to match the expected format (YYYY-MM-DD HH:mm:ss)
+        const formattedDate = dateInput.replace('T', ' ') + ':00';
+
         const goalData = {
+            action: editingGoalId ? 'update' : 'create',
             title: $('#goalTitle').val(),
             description: $('#goalDescription').val(),
-            deadline: $('#goalDeadline').val(),
+            deadline: formattedDate,
             priority: $('#goalPriority').val()
         };
+
+        if (editingGoalId) {
+            goalData.goal_id = editingGoalId;  
+        }
 
         $.ajax({
             url: 'api/goals.php',
             method: 'POST',
-            data: {
-                action: editingGoalId ? 'update' : 'create',
-                goal_id: editingGoalId,
-                ...goalData
-            },
+            data: goalData,
             success: function(response) {
                 if (response.success) {
                     $('#goalModal').modal('hide');
+                    $('#goalForm')[0].reset();
+                    editingGoalId = null;
                     loadGoals();
+                    loadReports();  
                 } else {
-                    alert(response.message);
+                    alert(response.message || 'Error saving goal');
                 }
+            },
+            error: function() {
+                alert('Error saving goal. Please try again.');
             }
         });
     });
@@ -360,8 +372,220 @@ $(document).ready(function() {
         loadGoals($(this).data('filter'));
     });
 
+    // Chart instances
+    let goalStatusChart = null;
+    let goalPriorityChart = null;
+    let monthlyTrendChart = null;
+
+    // Load reports on page load for logged-in users
+    if ($('#goalsDashboard').length > 0) {
+        loadReports();
+        loadGoals();
+    }
+
+    function loadReports() {
+        $.ajax({
+            url: 'api/reports.php',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    updateDashboard(response.data);
+                }
+            }
+        });
+    }
+
+    function updateDashboard(data) {
+        // Update summary cards
+        $('#totalGoals').text(data.goals.total_goals);
+        $('#completedGoals').text(data.goals.completed);
+        $('#totalMilestones').text(data.milestones.total_milestones);
+        
+        const todoCompletion = data.milestones.total_todos > 0
+            ? Math.round((data.milestones.completed_todos / data.milestones.total_todos) * 100)
+            : 0;
+        $('#todoCompletion').text(todoCompletion + '%');
+
+        // Update Goal Status Chart
+        updateGoalStatusChart(data.goals);
+
+        // Update Goal Priority Chart
+        updateGoalPriorityChart(data.goals_by_priority);
+
+        // Update Monthly Trend Chart
+        updateMonthlyTrendChart(data.monthly_trend);
+
+        // Update Upcoming Milestones
+        updateUpcomingMilestones(data.upcoming_milestones);
+    }
+
+    function updateGoalStatusChart(data) {
+        const ctx = document.getElementById('goalStatusChart');
+        if (!ctx) return;
+        
+        if (goalStatusChart) {
+            goalStatusChart.destroy();
+        }
+
+        goalStatusChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Not Started', 'In Progress', 'Completed'],
+                datasets: [{
+                    data: [data.not_started, data.in_progress, data.completed],
+                    backgroundColor: ['#dc3545', '#ffc107', '#28a745']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    function updateGoalPriorityChart(data) {
+        const ctx = document.getElementById('goalPriorityChart');
+        if (!ctx) return;
+        
+        if (goalPriorityChart) {
+            goalPriorityChart.destroy();
+        }
+
+        const priorities = data.map(item => item.priority.charAt(0).toUpperCase() + item.priority.slice(1));
+        const counts = data.map(item => item.count);
+
+        goalPriorityChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: priorities,
+                datasets: [{
+                    label: 'Goals by Priority',
+                    data: counts,
+                    backgroundColor: ['#28a745', '#ffc107', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    function updateMonthlyTrendChart(data) {
+        const ctx = document.getElementById('monthlyTrendChart');
+        if (!ctx) return;
+        
+        if (monthlyTrendChart) {
+            monthlyTrendChart.destroy();
+        }
+
+        const months = data.map(item => {
+            const [year, month] = item.month.split('-');
+            return new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' });
+        });
+
+        monthlyTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [
+                    {
+                        label: 'Total Goals',
+                        data: data.map(item => item.total_goals),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true
+                    },
+                    {
+                        label: 'Completed Goals',
+                        data: data.map(item => item.completed_goals),
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateUpcomingMilestones(milestones) {
+        const container = $('#upcomingMilestones');
+        if (!container.length) return;
+        
+        container.empty();
+
+        if (milestones.length === 0) {
+            container.html('<p class="text-muted">No upcoming milestones</p>');
+            return;
+        }
+
+        milestones.forEach(milestone => {
+            const dueDate = new Date(milestone.completion_date);
+            const progress = milestone.total_todos > 0
+                ? Math.round((milestone.completed_todos / milestone.total_todos) * 100)
+                : 0;
+
+            const item = $(`
+                <div class="list-group-item">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${milestone.title}</h6>
+                        <small class="text-muted">${dueDate.toLocaleDateString()}</small>
+                    </div>
+                    <p class="mb-1 small text-muted">Goal: ${milestone.goal_title}</p>
+                    <div class="progress mt-2" style="height: 5px;">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: ${progress}%" 
+                             aria-valuenow="${progress}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        ${milestone.completed_todos}/${milestone.total_todos} todos completed
+                    </small>
+                </div>
+            `);
+            container.append(item);
+        });
+    }
+
+    // Update reports when goals change
+    const originalDisplayGoals = displayGoals;
+    displayGoals = function(goals) {
+        originalDisplayGoals(goals);
+        loadReports();
+    };
+
     // Initial load
     if ($('#goalsDashboard').length) {
         loadGoals();
+        loadReports();
     }
 });
