@@ -1,0 +1,152 @@
+/* General Styles */
+body {
+    background-color: #f8f9fa;
+}
+
+.container {
+    max-width: 1200px;
+}
+
+/* Authentication Forms */
+.auth-form {
+    max-width: 400px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Goal Cards */
+.card {
+    transition: transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.progress {
+    height: 10px;
+    border-radius: 5px;
+}
+
+.badge {
+    padding: 0.5em 0.8em;
+    font-weight: 500;
+}
+
+/* Priority Colors */
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000;
+}
+
+.badge.bg-info {
+    background-color: #0dcaf0 !important;
+}
+
+/* Buttons */
+.btn-group {
+    gap: 0.5rem;
+}
+
+.btn-outline-primary:hover {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+/* Milestones */
+.milestone-item {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.milestone-item:hover {
+    background: #e9ecef;
+}
+
+.milestone-status {
+    margin-right: 0.5rem;
+}
+
+/* Modal Styles */
+.modal-content {
+    border-radius: 8px;
+    border: none;
+}
+
+.modal-header {
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-footer {
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .col-md-4 {
+        margin-bottom: 1rem;
+    }
+
+    .btn-group {
+        flex-wrap: wrap;
+    }
+
+    .btn-group .btn {
+        flex: 1;
+        min-width: calc(50% - 0.5rem);
+    }
+}
+
+/* Navigation */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+/* Form Controls */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
