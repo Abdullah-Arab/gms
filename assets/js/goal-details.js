@@ -68,8 +68,8 @@ $(document).ready(function() {
             return;
         }
 
-        const list = $('<div class="list-group"></div>');
-        milestones.forEach(milestone => {
+        const list = $('<div class="accordion" id="milestonesAccordion"></div>');
+        milestones.forEach((milestone, index) => {
             const completionDate = new Date(milestone.completion_date);
             const formattedDate = completionDate.toLocaleDateString();
             
@@ -78,57 +78,72 @@ $(document).ready(function() {
                 : 0;
 
             const item = $(`
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="flex-grow-1">
-                            <div class="form-check">
-                                <input class="form-check-input milestone-status" type="checkbox" 
-                                    value="${milestone.id}" ${milestone.status === 'completed' ? 'checked' : ''}>
-                                <label class="form-check-label">
-                                    ${milestone.title}
-                                </label>
+                <div class="accordion-item">
+                    <div class="accordion-header" id="milestone-${milestone.id}">
+                        <div class="accordion-button ${index === 0 ? '' : 'collapsed'}" 
+                             data-bs-toggle="collapse" 
+                             data-bs-target="#milestone-content-${milestone.id}">
+                            <div class="d-flex justify-content-between align-items-center w-100">
+                                <div class="flex-grow-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input milestone-status" type="checkbox" 
+                                            value="${milestone.id}" ${milestone.status === 'completed' ? 'checked' : ''}>
+                                        <label class="form-check-label">
+                                            ${milestone.title}
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Due: ${formattedDate}</small>
+                                    ${milestone.total_todos > 0 ? 
+                                        `<div class="progress mt-2" style="height: 5px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                style="width: ${todoProgress}%" 
+                                                aria-valuenow="${todoProgress}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">
+                                            ${milestone.completed_todos}/${milestone.total_todos} todos completed
+                                        </small>` 
+                                        : ''}
+                                </div>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-danger delete-milestone" 
+                                            data-milestone-id="${milestone.id}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <small class="text-muted">Due: ${formattedDate}</small>
-                            ${milestone.total_todos > 0 ? 
-                                `<div class="progress mt-2" style="height: 5px;">
-                                    <div class="progress-bar" role="progressbar" 
-                                        style="width: ${todoProgress}%" 
-                                        aria-valuenow="${todoProgress}" 
-                                        aria-valuemin="0" 
-                                        aria-valuemax="100">
+                        </div>
+                    </div>
+                    <div id="milestone-content-${milestone.id}" 
+                         class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+                         data-bs-parent="#milestonesAccordion">
+                        <div class="accordion-body">
+                            <div class="todo-section" data-milestone-id="${milestone.id}">
+                                <div class="row mb-3">
+                                    <div class="col">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control todo-input" 
+                                                   placeholder="Add new todo item">
+                                            <button class="btn btn-primary add-todo">Add</button>
+                                        </div>
                                     </div>
                                 </div>
-                                <small class="text-muted">
-                                    ${milestone.completed_todos}/${milestone.total_todos} todos completed
-                                </small>` 
-                                : ''}
-                        </div>
-                        <div class="btn-group">
-                            <button class="btn btn-sm btn-outline-primary view-todos" 
-                                    data-milestone-id="${milestone.id}">
-                                <i class="bi bi-list-check"></i> Todos
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger delete-milestone" 
-                                    data-milestone-id="${milestone.id}">
-                                <i class="bi bi-trash"></i>
-                            </button>
+                                <div class="todo-list"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             `);
             list.append(item);
+            
+            // Load todos for this milestone
+            loadTodos(milestone.id);
         });
 
         container.append(list);
     }
-
-    // Handle Todo List View
-    $(document).on('click', '.view-todos', function() {
-        const milestoneId = $(this).data('milestone-id');
-        $('#currentMilestoneId').val(milestoneId);
-        loadTodos(milestoneId);
-        $('#todoModal').modal('show');
-    });
 
     // Load Todos
     function loadTodos(milestoneId) {
@@ -137,15 +152,15 @@ $(document).ready(function() {
             method: 'GET',
             success: function(response) {
                 if (response.success) {
-                    displayTodos(response.todos);
+                    displayTodos(milestoneId, response.todos);
                 }
             }
         });
     }
 
     // Display Todos
-    function displayTodos(todos) {
-        const container = $('#todoList');
+    function displayTodos(milestoneId, todos) {
+        const container = $(`.todo-section[data-milestone-id="${milestoneId}"] .todo-list`);
         container.empty();
 
         if (todos.length === 0) {
@@ -153,34 +168,41 @@ $(document).ready(function() {
             return;
         }
 
+        const list = $('<div class="list-group"></div>');
         todos.forEach(todo => {
             const item = $(`
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between align-items-center">
-                        <div class="form-check">
+                        <div class="form-check flex-grow-1">
                             <input class="form-check-input todo-status" type="checkbox" 
+                                data-milestone-id="${milestoneId}"
                                 value="${todo.id}" ${todo.status === 'completed' ? 'checked' : ''}>
-                            <label class="form-check-label">
+                            <label class="form-check-label ${todo.status === 'completed' ? 'text-decoration-line-through' : ''}">
                                 ${todo.title}
                             </label>
                         </div>
-                        <button class="btn btn-sm btn-outline-danger delete-todo" data-todo-id="${todo.id}">
+                        <button class="btn btn-sm btn-outline-danger delete-todo" 
+                                data-todo-id="${todo.id}"
+                                data-milestone-id="${milestoneId}">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
                 </div>
             `);
-            container.append(item);
+            list.append(item);
         });
+        container.append(list);
     }
 
     // Add Todo
-    $('#addTodo').click(function() {
-        const title = $('#todoTitle').val().trim();
+    $(document).on('click', '.add-todo', function() {
+        const section = $(this).closest('.todo-section');
+        const milestoneId = section.data('milestone-id');
+        const input = section.find('.todo-input');
+        const title = input.val().trim();
+        
         if (!title) return;
 
-        const milestoneId = $('#currentMilestoneId').val();
-        
         $.ajax({
             url: 'api/todos.php',
             method: 'POST',
@@ -191,7 +213,7 @@ $(document).ready(function() {
             },
             success: function(response) {
                 if (response.success) {
-                    $('#todoTitle').val('');
+                    input.val('');
                     loadTodos(milestoneId);
                     loadMilestones(); // Refresh milestone progress
                 } else {
@@ -204,7 +226,7 @@ $(document).ready(function() {
     // Toggle Todo Status
     $(document).on('change', '.todo-status', function() {
         const todoId = $(this).val();
-        const milestoneId = $('#currentMilestoneId').val();
+        const milestoneId = $(this).data('milestone-id');
 
         $.ajax({
             url: 'api/todos.php',
@@ -228,7 +250,7 @@ $(document).ready(function() {
         if (!confirm('Are you sure you want to delete this todo?')) return;
 
         const todoId = $(this).data('todo-id');
-        const milestoneId = $('#currentMilestoneId').val();
+        const milestoneId = $(this).data('milestone-id');
 
         $.ajax({
             url: 'api/todos.php',
@@ -248,7 +270,8 @@ $(document).ready(function() {
     });
 
     // Toggle Milestone Status
-    $(document).on('change', '.milestone-status', function() {
+    $(document).on('change', '.milestone-status', function(e) {
+        e.stopPropagation(); // Prevent accordion from toggling
         const milestoneId = $(this).val();
         const goalId = $('#goalId').val();
 
@@ -269,7 +292,8 @@ $(document).ready(function() {
     });
 
     // Delete Milestone
-    $(document).on('click', '.delete-milestone', function() {
+    $(document).on('click', '.delete-milestone', function(e) {
+        e.stopPropagation(); // Prevent accordion from toggling
         if (!confirm('Are you sure you want to delete this milestone and all its todos?')) return;
 
         const milestoneId = $(this).data('milestone-id');

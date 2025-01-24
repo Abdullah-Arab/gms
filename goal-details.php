@@ -76,7 +76,7 @@ if (!$goalData) {
         <div class="row">
             <div class="col-md-12">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Milestones</h5>
                     </div>
                     <div class="card-body">
@@ -114,29 +114,44 @@ if (!$goalData) {
         </div>
     </div>
 
-    <!-- Todo List Modal -->
-    <div class="modal fade" id="todoModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Todo List</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="currentMilestoneId">
-                    <div class="row mb-3">
-                        <div class="col">
-                            <input type="text" class="form-control" id="todoTitle" placeholder="New todo item">
-                        </div>
-                        <div class="col-auto">
-                            <button class="btn btn-primary" id="addTodo">Add</button>
-                        </div>
-                    </div>
-                    <div id="todoList" class="list-group"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <style>
+        /* Custom styles for the accordion */
+        .accordion-button::after {
+            margin-left: 1rem;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: #f8f9fa;
+            color: inherit;
+        }
+        
+        .todo-section {
+            padding: 1rem 0;
+        }
+        
+        .todo-list .list-group-item {
+            border-left: none;
+            border-right: none;
+            border-radius: 0;
+        }
+        
+        .todo-list .list-group-item:first-child {
+            border-top: none;
+        }
+        
+        .todo-list .list-group-item:last-child {
+            border-bottom: none;
+        }
+        
+        .form-check-input:checked + .form-check-label {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+        
+        .milestone-status {
+            z-index: 3;
+        }
+    </style>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
