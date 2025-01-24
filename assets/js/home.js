@@ -314,6 +314,7 @@ $(document).ready(function() {
         const goalData = {
             title: $('#goalTitle').val(),
             description: $('#goalDescription').val(),
+            deadline: $('#goalDeadline').val(),
             priority: $('#goalPriority').val()
         };
 
@@ -329,6 +330,7 @@ $(document).ready(function() {
                     $('#goalModal').modal('hide');
                     $('#goalTitle').val('');
                     $('#goalDescription').val('');
+                    $('#goalDeadline').val('');
                     $('#goalPriority').val('medium');
                     loadGoals();
                     loadReports();

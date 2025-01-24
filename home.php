@@ -169,6 +169,10 @@ if (!isLoggedIn()) {
                         <textarea class="form-control" id="goalDescription" rows="3"></textarea>
                     </div>
                     <div class="mb-3">
+                        <label for="goalDeadline" class="form-label">Deadline</label>
+                        <input type="datetime-local" class="form-control" id="goalDeadline" required>
+                    </div>
+                    <div class="mb-3">
                         <label for="goalPriority" class="form-label">Priority</label>
                         <select class="form-select" id="goalPriority">
                             <option value="low">Low</option>
