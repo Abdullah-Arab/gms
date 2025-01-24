@@ -13,35 +13,52 @@ $(document).ready(function() {
             url: 'api/reports.php',
             method: 'GET',
             success: function(response) {
-                if (response.success) {
+                if (response && response.success && response.data) {
+                    console.log('Reports data:', response.data);
                     updateDashboard(response.data);
+                } else {
+                    console.error('Error loading reports:', response ? response.message : 'Unknown error');
                 }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX error loading reports:', error);
+                console.error('Response:', xhr.responseText);
             }
         });
     }
 
     function updateDashboard(data) {
-        // Update summary cards
-        $('#totalGoals').text(data.goals.total_goals);
-        $('#completedGoals').text(data.goals.completed);
-        $('#totalMilestones').text(data.milestones.total_milestones);
+        if (!data) return;
         
-        const todoCompletion = data.milestones.total_todos > 0
+        // Update summary cards
+        $('#totalGoals').text(data.goals ? data.goals.total_goals || 0 : 0);
+        $('#completedGoals').text(data.goals ? data.goals.completed || 0 : 0);
+        $('#totalMilestones').text(data.milestones ? data.milestones.total_milestones || 0 : 0);
+        
+        const todoCompletion = data.milestones && data.milestones.total_todos > 0
             ? Math.round((data.milestones.completed_todos / data.milestones.total_todos) * 100)
             : 0;
         $('#todoCompletion').text(todoCompletion + '%');
 
         // Update Goal Status Chart
-        updateGoalStatusChart(data.goals);
+        if (data.goals) {
+            updateGoalStatusChart(data.goals);
+        }
 
         // Update Goal Priority Chart
-        updateGoalPriorityChart(data.goals_by_priority);
+        if (data.goals_by_priority) {
+            updateGoalPriorityChart(data.goals_by_priority);
+        }
 
         // Update Monthly Trend Chart
-        updateMonthlyTrendChart(data.monthly_trend);
+        if (data.monthly_trend) {
+            updateMonthlyTrendChart(data.monthly_trend);
+        }
 
         // Update Upcoming Milestones
-        updateUpcomingMilestones(data.upcoming_milestones);
+        if (data.upcoming_milestones) {
+            updateUpcomingMilestones(data.upcoming_milestones);
+        }
     }
 
     function updateGoalStatusChart(data) {
@@ -56,7 +73,11 @@ $(document).ready(function() {
             data: {
                 labels: ['Not Started', 'In Progress', 'Completed'],
                 datasets: [{
-                    data: [data.not_started, data.in_progress, data.completed],
+                    data: [
+                        data.not_started || 0,
+                        data.in_progress || 0,
+                        data.completed || 0
+                    ],
                     backgroundColor: ['#dc3545', '#ffc107', '#28a745']
                 }]
             },
@@ -79,7 +100,7 @@ $(document).ready(function() {
         }
 
         const priorities = data.map(item => item.priority.charAt(0).toUpperCase() + item.priority.slice(1));
-        const counts = data.map(item => item.count);
+        const counts = data.map(item => item.count || 0);
 
         goalPriorityChart = new Chart(ctx, {
             type: 'bar',
@@ -117,10 +138,9 @@ $(document).ready(function() {
             monthlyTrendChart.destroy();
         }
 
-        const months = data.map(item => {
-            const [year, month] = item.month.split('-');
-            return new Date(year, month - 1).toLocaleDateString('default', { month: 'short', year: 'numeric' });
-        });
+        const months = data.map(item => item.month);
+        const totalGoals = data.map(item => item.total_goals || 0);
+        const completedGoals = data.map(item => item.completed_goals || 0);
 
         monthlyTrendChart = new Chart(ctx, {
             type: 'line',
@@ -129,16 +149,16 @@ $(document).ready(function() {
                 datasets: [
                     {
                         label: 'Total Goals',
-                        data: data.map(item => item.total_goals),
+                        data: totalGoals,
                         borderColor: '#0d6efd',
                         backgroundColor: 'rgba(13, 110, 253, 0.1)',
                         fill: true
                     },
                     {
                         label: 'Completed Goals',
-                        data: data.map(item => item.completed_goals),
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        data: completedGoals,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
                         fill: true
                     }
                 ]
@@ -162,37 +182,37 @@ $(document).ready(function() {
         container.empty();
 
         if (milestones.length === 0) {
-            container.html('<p class="text-muted">No upcoming milestones</p>');
+            container.append('<div class="text-muted">No upcoming milestones</div>');
             return;
         }
 
         milestones.forEach(milestone => {
-            const dueDate = new Date(milestone.completion_date);
-            const progress = milestone.total_todos > 0
+            const todoProgress = milestone.total_todos > 0
                 ? Math.round((milestone.completed_todos / milestone.total_todos) * 100)
                 : 0;
 
-            const item = $(`
+            const milestoneHtml = `
                 <div class="list-group-item">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">${milestone.title}</h6>
-                        <small class="text-muted">${dueDate.toLocaleDateString()}</small>
+                        <small>${formatDate(milestone.completion_date)}</small>
                     </div>
-                    <p class="mb-1 small text-muted">Goal: ${milestone.goal_title}</p>
+                    <p class="mb-1 text-muted small">${milestone.goal_title}</p>
                     <div class="progress mt-2" style="height: 5px;">
-                        <div class="progress-bar" role="progressbar" 
-                             style="width: ${progress}%" 
-                             aria-valuenow="${progress}" 
-                             aria-valuemin="0" 
-                             aria-valuemax="100">
-                        </div>
+                        <div class="progress-bar" role="progressbar" style="width: ${todoProgress}%"></div>
                     </div>
-                    <small class="text-muted">
-                        ${milestone.completed_todos}/${milestone.total_todos} todos completed
-                    </small>
                 </div>
-            `);
-            container.append(item);
+            `;
+            container.append(milestoneHtml);
+        });
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
         });
     }
 

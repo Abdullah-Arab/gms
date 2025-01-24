@@ -11,7 +11,7 @@ class Database {
 
     private function __construct() {
         try {
-            $dsn = "mysql:host=" . DB_HOST . ";charset=" . DB_CHARSET;
+            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
             $this->conn = new PDO($dsn, DB_USER, DB_PASS);
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->initializeDatabase();
@@ -33,9 +33,11 @@ class Database {
 
     private function initializeDatabase() {
         try {
+            error_log("Initializing database...");
             // Create database if not exists
             $this->conn->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
             $this->conn->exec("USE " . DB_NAME);
+            error_log("Database selected successfully");
 
             // Create users table
             $this->conn->exec("
@@ -46,6 +48,7 @@ class Database {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ");
+            error_log("Users table created/verified");
 
             // Create goals table
             $this->conn->exec("
@@ -61,6 +64,7 @@ class Database {
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             ");
+            error_log("Goals table created/verified");
 
             // Create milestones table
             $this->conn->exec("
@@ -68,14 +72,16 @@ class Database {
                     id INT PRIMARY KEY AUTO_INCREMENT,
                     goal_id INT NOT NULL,
                     title VARCHAR(255) NOT NULL,
-                    completion_date DATETIME,
+                    description TEXT,
                     status ENUM('pending', 'completed') DEFAULT 'pending',
-                    completed_todos INT DEFAULT 0,
+                    completion_date DATE,
                     total_todos INT DEFAULT 0,
+                    completed_todos INT DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
                 )
             ");
+            error_log("Milestones table created/verified");
 
             // Create todo_items table
             $this->conn->exec("
@@ -91,23 +97,6 @@ class Database {
                 )
             ");
 
-            // Add columns to milestones table if they don't exist
-            try {
-                $this->conn->exec("
-                    ALTER TABLE milestones 
-                    ADD COLUMN IF NOT EXISTS completed_todos INT DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS total_todos INT DEFAULT 0
-                ");
-
-                // Add deadline column to goals table if it doesn't exist
-                $this->conn->exec("
-                    ALTER TABLE goals 
-                    ADD COLUMN IF NOT EXISTS deadline DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                ");
-            } catch (PDOException $e) {
-                // Ignore error if columns already exist
-            }
-
             // Add indexes for better performance
             try {
                 $this->conn->exec("
@@ -121,6 +110,7 @@ class Database {
             }
 
         } catch (PDOException $e) {
+            error_log("Error initializing database: " . $e->getMessage());
             die("Error initializing database: " . $e->getMessage());
         }
     }
