@@ -230,6 +230,8 @@ $(document).ready(function() {
     }
 
     // Display Goals
+    let currentSort = { field: 'deadline', direction: 'asc' };
+    
     function displayGoals(goals) {
         const container = $('#goalsList');
         container.empty();
@@ -239,13 +241,38 @@ $(document).ready(function() {
             return;
         }
 
+        // Sort goals based on current sort settings
+        goals.sort((a, b) => {
+            let aVal = a[currentSort.field];
+            let bVal = b[currentSort.field];
+            
+            // Handle special cases
+            if (currentSort.field === 'deadline') {
+                aVal = new Date(aVal);
+                bVal = new Date(bVal);
+            }
+            
+            if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
         const table = $(`
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Title</th>
-                        <th>Priority</th>
-                        <th>Status</th>
+                        <th class="sortable" data-sort="title">
+                            Title <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="sortable" data-sort="deadline">
+                            Deadline <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="sortable" data-sort="priority">
+                            Priority <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="sortable" data-sort="status">
+                            Status <i class="bi bi-arrow-down-up"></i>
+                        </th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -257,6 +284,7 @@ $(document).ready(function() {
             const row = $(`
                 <tr>
                     <td>${goal.title}</td>
+                    <td>${formatDate(goal.deadline)}</td>
                     <td>
                         <span class="badge bg-${getPriorityColor(goal.priority)}">
                             ${goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
@@ -283,6 +311,31 @@ $(document).ready(function() {
         });
 
         container.append(table);
+
+        // Add click handlers for sorting
+        $('.sortable').click(function() {
+            const field = $(this).data('sort');
+            if (currentSort.field === field) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.field = field;
+                currentSort.direction = 'asc';
+            }
+            
+            // Update sort icons
+            $('.sortable i').removeClass('bi-arrow-up bi-arrow-down').addClass('bi-arrow-down-up');
+            const icon = $(this).find('i');
+            icon.removeClass('bi-arrow-down-up')
+                .addClass(currentSort.direction === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down');
+            
+            displayGoals(goals);
+        });
+
+        // Show current sort
+        const currentHeader = $(`.sortable[data-sort="${currentSort.field}"]`);
+        currentHeader.find('i')
+            .removeClass('bi-arrow-down-up')
+            .addClass(currentSort.direction === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down');
     }
 
     function getPriorityColor(priority) {
